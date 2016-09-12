@@ -26,6 +26,20 @@ namespace SkytapUtilities.Actions
             MakeRestRequest("configurations/" + configId + ".json", Method.PUT, new Parameter("runstate", "running"));
             Console.WriteLine(".... Done");
         }
-        
+
+        public void SuspendConfig(string configId)
+        {
+            Console.Write("Suspend a config - " + configId);
+            MakeRestRequest("configurations/" + configId + ".json", Method.PUT, new Parameter("runstate", "suspended"));
+            Console.WriteLine(".... Done");
+        }
+
+        public void AddVMsFromTemplateToConfig(string configId, string templateId)
+        {
+            Console.Write("Add VMs from Template "+templateId+" to config " + configId);
+            var parameters = new[] { new Parameter("template_id", templateId) };
+            MakeRestRequest("configurations/" + configId + ".json", Method.PUT, parameters);
+            Console.WriteLine(".... Done");
+        }
     }
 }

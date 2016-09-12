@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using Newtonsoft.Json.Linq;
 using SkytapUtilities.Actions;
 
@@ -12,11 +11,13 @@ namespace SkytapUtilities
     internal enum CommandActions
     {
         DeleteTemplate,
+        DeleteConfig,
         DeleteConfigs,
         NewConfigsAndStart,
         CreateTemplate,
         AddVmToConfigFromTemplate,
-        FindLatestTemplate
+        FindLatestTemplate,
+        AddTemplateToProject
     }
     public static class Program
     {
@@ -26,6 +27,10 @@ namespace SkytapUtilities
         {
             if (args.Any(a => a.Equals("help", StringComparison.InvariantCultureIgnoreCase) || a.Equals("?", StringComparison.InvariantCultureIgnoreCase)))
                 return false;
+
+            Console.WriteLine("Command line args inputted as such:");
+            foreach (var arg in args)
+                Console.Write(arg + " ");
 
             foreach (var arg in args)
             {
@@ -71,6 +76,9 @@ namespace SkytapUtilities
                             case "deleteconfigs":
                                 _commandActions = CommandActions.DeleteConfigs;
                                 break;
+                            case "deleteconfig":
+                                _commandActions = CommandActions.DeleteConfig;
+                                break;
                             case "deletetemplate":
                                 _commandActions = CommandActions.DeleteTemplate;
                                 break;
@@ -79,6 +87,15 @@ namespace SkytapUtilities
                                 break;
                             case "findlatesttemplate":
                                 _commandActions = CommandActions.FindLatestTemplate;
+                                break;
+                            case "createtemplate":
+                                _commandActions = CommandActions.CreateTemplate;
+                                break;
+                            case "addvmtoconfigfromtemplate":
+                                _commandActions = CommandActions.AddVmToConfigFromTemplate;
+                                break;
+                            case "addtemplatetoproject":
+                                _commandActions = CommandActions.AddTemplateToProject;
                                 break;
                             default:
                                 Console.WriteLine("\nError!! The argument {0} is invalid! This must be equal to \"DELETE\", \"NEWCONFIG\"", argName);
@@ -140,6 +157,35 @@ namespace SkytapUtilities
                         ConfigurationManager.AppSettings["PropName"] == null || ConfigurationManager.AppSettings["PropertiesFilePath"] == null)
                     {
                         Console.WriteLine("For NewConfig action - ProjectID, TemplateSearchTerms, PropName, and PropertiesFilePath are all required in the commandline arg.");
+                        ret = false;
+                    }
+                    break;
+                case CommandActions.CreateTemplate:
+                    if (ConfigurationManager.AppSettings["ConfigId"] == null || ConfigurationManager.AppSettings["ProjectID"] == null ||
+                        ConfigurationManager.AppSettings["ConfigName"] == null)
+                    {
+                        Console.WriteLine("For CreateTemplate action - ProjectID, ConfigId, and ConfigName are all required in the commandline arg.");
+                        ret = false;
+                    }
+                    break;
+                case CommandActions.AddVmToConfigFromTemplate:
+                    if (ConfigurationManager.AppSettings["ConfigId"] == null || ConfigurationManager.AppSettings["TemplateId"] == null)
+                    {
+                        Console.WriteLine("For AddVmToConfigFromTemplate action - ConfigId and TemplateId are all required in the commandline arg.");
+                        ret = false;
+                    }
+                    break;
+                case CommandActions.DeleteConfig:
+                    if (ConfigurationManager.AppSettings["ConfigId"] == null)
+                    {
+                        Console.WriteLine("For DeleteConfig action - ConfigId is required in the commandline arg.");
+                        ret = false;
+                    }
+                    break;
+                case CommandActions.AddTemplateToProject:
+                    if (ConfigurationManager.AppSettings["ProjectId"] == null || ConfigurationManager.AppSettings["TemplateId"] == null)
+                    {
+                        Console.WriteLine("For AddTemplateToProject action - ProjectID and TemplateId are all required in the commandline arg.");
                         ret = false;
                     }
                     break;
@@ -205,15 +251,14 @@ namespace SkytapUtilities
                     Console.WriteLine("Current Step: Create new configurations.");
                     var ids = new List<string>();
                     var configName = ConfigurationManager.AppSettings["ConfigPrefixName"];
-                    var jsonDir = ConfigurationManager.AppSettings["SaveToJsonDir"];
+                    
                     var num = int.Parse(ConfigurationManager.AppSettings["numconfigs"]);
+                    
                     for (var i = 0; i < num; i++)
                     {
                         var name = num == 1 ? configName : configName + " " + (i + 1);
                         token = Create.Action.Config(ConfigurationManager.AppSettings["TemplateID"], name);
                         Add.Action.ConfigToProject(token.Value<string>("id"), ConfigurationManager.AppSettings["ProjectIDAddTo"]);
-                        if (jsonDir != null)
-                            File.WriteAllText(Path.Combine(jsonDir, name+".json"), token.ToString());
                         ids.Add(token.Value<string>("id"));
                         Edit.Action.AutoSuspend(token.Value<string>("id"), 14400);  // Make Auto suspend to 4hrs
                     }
@@ -221,25 +266,7 @@ namespace SkytapUtilities
                     {// start all the VMs
                         Edit.Action.StartConfig(id);
                     }
-
-                    var configsToQuery = ids.ToList();
-                    while (true)
-                    {
-                        List<string> busyConfigs, notBusyConfigs;
-                        Helpers.QueryNotBusyRunStateConfigs(configsToQuery, out busyConfigs, out notBusyConfigs);
-                        if (notBusyConfigs.Count != configsToQuery.Count)
-                        {
-                            var minToWait = busyConfigs.Count; // a min per machine 
-                            Console.WriteLine(busyConfigs.Count + " configs are still starting. Wait for "+minToWait+" mins");
-                            configsToQuery = busyConfigs;
-                            Thread.Sleep(new TimeSpan(0, minToWait, 0));
-                        }
-                        else
-                        {
-                            Console.WriteLine("All configs started.");
-                            break;
-                        }
-                    }
+                    Helpers.WaitForConfigsNotBusy(ids.ToList());
                     break;
                 }
                 case CommandActions.FindLatestTemplate:
@@ -248,6 +275,26 @@ namespace SkytapUtilities
                     var tempIdToFile = Helpers.GetIdsLatestWithSearchTerms(jArray, ConfigurationManager.AppSettings["TemplateSearchTerms"].Split(','));
                     var lineToWrite = ConfigurationManager.AppSettings["PropName"]+"="+tempIdToFile;
                     File.WriteAllText(ConfigurationManager.AppSettings["PropertiesFilePath"], lineToWrite);
+                    break;
+                case CommandActions.CreateTemplate:
+                    Console.WriteLine("Current Step: Create Template from Config");
+                    Edit.Action.SuspendConfig(ConfigurationManager.AppSettings["configid"]);
+                    Helpers.WaitForConfigsNotBusy(new List<string>() { ConfigurationManager.AppSettings["configid"] });
+
+                    token = Create.Action.Template(ConfigurationManager.AppSettings["configid"], ConfigurationManager.AppSettings["ConfigName"]);
+                    Add.Action.TemplateToProject(token.Value<string>("id"), ConfigurationManager.AppSettings["ProjectID"]);
+                    break;
+                case CommandActions.AddVmToConfigFromTemplate:
+                    Console.WriteLine("Current Step: Add a VM from Template to a Config");
+                    Edit.Action.AddVMsFromTemplateToConfig(ConfigurationManager.AppSettings["configid"], ConfigurationManager.AppSettings["templateId"]);
+                    break;
+                case CommandActions.DeleteConfig:
+                    Console.WriteLine("Current Step: Delete a config");
+                    Delete.Action.Config(ConfigurationManager.AppSettings["configid"]);
+                    break;
+                case CommandActions.AddTemplateToProject:
+                    Console.WriteLine("Current Step: Add Template to a Project");
+                    Add.Action.TemplateToProject(ConfigurationManager.AppSettings["templateId"], ConfigurationManager.AppSettings["projectid"]);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();

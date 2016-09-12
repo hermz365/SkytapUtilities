@@ -15,5 +15,12 @@ namespace SkytapUtilities.Actions
             MakeRestRequest("projects/"+projectId+"/configurations/"+configId, Method.POST);
             Console.WriteLine(".... Done");
         }
+
+        public void TemplateToProject(string templateId, string projectId)
+        {
+            Console.Write("Add a template (" + templateId + ") to a project - " + projectId);
+            MakeRestRequest("projects/" + projectId + "/templates/" + templateId, Method.POST);
+            Console.WriteLine(".... Done");
+        }
     }
 }

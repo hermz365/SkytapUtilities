@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using RestSharp;
@@ -41,7 +42,36 @@ namespace SkytapUtilities
             return tempList.Max().ToString();
         }
 
-        public static void QueryNotBusyRunStateConfigs(List<string> configsTobeQuery, out List<string> busyConfigs, out List<string> notBusyConfigs)
+        public static void WaitForConfigsNotBusy(List<string> ids)
+        {
+            while (true)
+            {
+                List<string> busyConfigs, notBusyConfigs;
+                Helpers.QueryNotBusyRunStateConfigs(ids, out busyConfigs, out notBusyConfigs);
+                if (notBusyConfigs.Count != ids.Count)
+                {
+                    ids = busyConfigs;
+
+                    if (busyConfigs.Count == 1)
+                    {// When there is only one left. Poll every 30 sec 
+                        Console.WriteLine(busyConfigs.Count + " config is still busy. Wait for 30sec");
+                        Thread.Sleep(new TimeSpan(0, 0, 30));
+                    }
+                    else
+                    {// One machine / minute
+                        Console.WriteLine(busyConfigs.Count + " configs are still busy. Wait for " + busyConfigs.Count + " mins");
+                        Thread.Sleep(new TimeSpan(0, busyConfigs.Count, 0));
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("All configs not busy.");
+                    break;
+                }
+            }
+        }
+
+        private static void QueryNotBusyRunStateConfigs(List<string> configsTobeQuery, out List<string> busyConfigs, out List<string> notBusyConfigs)
         {
             busyConfigs = new List<string>();
             notBusyConfigs = new List<string>();
