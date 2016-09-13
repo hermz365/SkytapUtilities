@@ -14,6 +14,7 @@ namespace SkytapUtilities
         DeleteConfig,
         DeleteConfigs,
         NewConfigsAndStart,
+        NewConfig,
         CreateTemplate,
         AddVmToConfigFromTemplate,
         FindLatestTemplate,
@@ -31,6 +32,7 @@ namespace SkytapUtilities
             Console.WriteLine("Command line args inputted as such:");
             foreach (var arg in args)
                 Console.Write(arg + " ");
+            Console.WriteLine();
 
             foreach (var arg in args)
             {
@@ -85,6 +87,9 @@ namespace SkytapUtilities
                             case "newconfigsandstart":
                                 _commandActions = CommandActions.NewConfigsAndStart;
                                 break;
+                            case "newconfig":
+                                _commandActions = CommandActions.NewConfig;
+                                break;
                             case "findlatesttemplate":
                                 _commandActions = CommandActions.FindLatestTemplate;
                                 break;
@@ -134,6 +139,14 @@ namespace SkytapUtilities
                     if (ConfigurationManager.AppSettings["ProjectID"] == null || ConfigurationManager.AppSettings["TemplateName"] == null)
                     {
                         Console.WriteLine("For DeleteTemplate action - ProjectID and TemplateName are both required in the commandline arg.");
+                        ret = false;
+                    }
+                    break;
+                case CommandActions.NewConfig:
+                    if (ConfigurationManager.AppSettings["TemplateID"] == null || ConfigurationManager.AppSettings["ProjectIDAddTo"] == null ||
+                        ConfigurationManager.AppSettings["ConfigName"] == null)
+                    {
+                        Console.WriteLine("For NewConfig action - TemplateID, ProjectIDAddTo, NumConfig, and ConfigPrefixName are all required in the commandline arg.");
                         ret = false;
                     }
                     break;
@@ -246,6 +259,14 @@ namespace SkytapUtilities
                     foreach (var id in configsId)
                         Delete.Action.Config(id);
                     break;
+                case CommandActions.NewConfig:
+                    {
+                        Console.WriteLine("Current Step: Create new configurations.");
+                        var configName = ConfigurationManager.AppSettings["ConfigName"];
+                        token = Create.Action.Config(ConfigurationManager.AppSettings["TemplateID"], configName);
+                        Add.Action.ConfigToProject(token.Value<string>("id"), ConfigurationManager.AppSettings["ProjectIDAddTo"]);
+                        break;
+                    }
                 case CommandActions.NewConfigsAndStart:
                 {
                     Console.WriteLine("Current Step: Create new configurations.");
