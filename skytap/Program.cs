@@ -103,7 +103,7 @@ namespace SkytapUtilities
                                 _commandActions = CommandActions.AddTemplateToProject;
                                 break;
                             default:
-                                Console.WriteLine("\nError!! The argument {0} is invalid! This must be equal to \"DELETE\", \"NEWCONFIG\"", argName);
+                                Console.WriteLine("\nError!! The argument {0} is invalid!", argName);
                                 return false;
                         }
                         break;
@@ -215,7 +215,7 @@ namespace SkytapUtilities
             if (_commandActions == CommandActions.FindLatestTemplate)
             {
                 var dir = Path.GetDirectoryName(ConfigurationManager.AppSettings["propertiesfilepath"]);
-                if (!Directory.Exists(dir))
+                if (dir != null && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
                 if(File.Exists(ConfigurationManager.AppSettings["propertiesfilepath"]))
