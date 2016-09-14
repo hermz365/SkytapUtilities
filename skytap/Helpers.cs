@@ -75,7 +75,13 @@ namespace SkytapUtilities
             {
                 var c = QueryInfo.Action.Config(id);
                 Console.WriteLine("name: " + c.Value<string>("name") + " runstate: " + c.Value<string>("runstate"));
-                if(c.Value<string>("runstate").Equals("busy", StringComparison.CurrentCultureIgnoreCase))
+                if (c.Value<string>("runstate") == "suspended")
+                {
+                    Console.WriteLine("Sometimes skytap just suspends it when it is supposed to run.");
+                    Edit.Action.StartConfig(id);
+                    c = QueryInfo.Action.Config(id);
+                }
+                if (c.Value<string>("runstate").Equals("busy", StringComparison.CurrentCultureIgnoreCase))
                     busyConfigs.Add(id);
                 else
                     notBusyConfigs.Add(id);
