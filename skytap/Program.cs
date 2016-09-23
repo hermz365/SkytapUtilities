@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 using SkytapUtilities.Actions;
 
@@ -218,7 +219,7 @@ namespace SkytapUtilities
                 if (dir != null && !Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-                if(File.Exists(ConfigurationManager.AppSettings["propertiesfilepath"]))
+                if (File.Exists(ConfigurationManager.AppSettings["propertiesfilepath"]))
                     File.Delete(ConfigurationManager.AppSettings["propertiesfilepath"]);
             }
             return true;
@@ -244,14 +245,14 @@ namespace SkytapUtilities
             switch (_commandActions)
             {
                 case CommandActions.DeleteTemplate:
-                {
-                    Console.WriteLine("Current Step: Delete template(s) based on template name in specified project.");
-                    jArray = QueryInfo.Action.GetTemplatesInfo(ConfigurationManager.AppSettings["projectid"]);
-                    var templateId = Helpers.GetIdsByName(jArray, ConfigurationManager.AppSettings["TemplateName"]);
-                    foreach (var tempId in templateId)
-                        Delete.Action.Template(tempId);
-                    break;
-                }
+                    {
+                        Console.WriteLine("Current Step: Delete template(s) based on template name in specified project.");
+                        jArray = QueryInfo.Action.GetTemplatesInfo(ConfigurationManager.AppSettings["projectid"]);
+                        var templateId = Helpers.GetIdsByName(jArray, ConfigurationManager.AppSettings["TemplateName"]);
+                        foreach (var tempId in templateId)
+                            Delete.Action.Template(tempId);
+                        break;
+                    }
                 case CommandActions.DeleteConfigs:
                     Console.WriteLine("Current Step: Delete Config(s) based on name prefix in specified project.");
                     jArray = QueryInfo.Action.GetConfigsInfo(ConfigurationManager.AppSettings["projectid"]);
@@ -268,33 +269,35 @@ namespace SkytapUtilities
                         break;
                     }
                 case CommandActions.NewConfigsAndStart:
-                {
-                    Console.WriteLine("Current Step: Create new configurations.");
-                    var ids = new List<string>();
-                    var configName = ConfigurationManager.AppSettings["ConfigPrefixName"];
-                    
-                    var num = int.Parse(ConfigurationManager.AppSettings["numconfigs"]);
-                    
-                    for (var i = 0; i < num; i++)
                     {
-                        var name = num == 1 ? configName : configName + " " + (i + 1);
-                        token = Create.Action.Config(ConfigurationManager.AppSettings["TemplateID"], name);
-                        Add.Action.ConfigToProject(token.Value<string>("id"), ConfigurationManager.AppSettings["ProjectIDAddTo"]);
-                        ids.Add(token.Value<string>("id"));
-                        Edit.Action.AutoSuspend(token.Value<string>("id"), 14400);  // Make Auto suspend to 4hrs
+                        Console.WriteLine("Current Step: Create new configurations.");
+                        var ids = new List<string>();
+                        var configName = ConfigurationManager.AppSettings["ConfigPrefixName"];
+
+                        var num = int.Parse(ConfigurationManager.AppSettings["numconfigs"]);
+
+                        for (var i = 0; i < num; i++)
+                        {
+                            var name = num == 1 ? configName : configName + " " + (i + 1);
+                            token = Create.Action.Config(ConfigurationManager.AppSettings["TemplateID"], name);
+                            Add.Action.ConfigToProject(token.Value<string>("id"), ConfigurationManager.AppSettings["ProjectIDAddTo"]);
+                            ids.Add(token.Value<string>("id"));
+                            Edit.Action.AutoSuspend(token.Value<string>("id"), 28800);  // Make Auto suspend to 8hrs
+                        }
+                        foreach (var id in ids)
+                        {// start all the VMs
+                            Edit.Action.StartConfig(id);
+                            Thread.Sleep(new TimeSpan(0, 1, 0));
+                        }
+                        Helpers.WaitForConfigsNotBusy(ids.ToList());
+                        Helpers.EnsureAllConfigsAreRunning(ids.ToList());
+                        break;
                     }
-                    foreach (var id in ids)
-                    {// start all the VMs
-                        Edit.Action.StartConfig(id);
-                    }
-                    Helpers.WaitForConfigsNotBusy(ids.ToList());
-                    break;
-                }
                 case CommandActions.FindLatestTemplate:
                     Console.WriteLine("Current Step: Find template Id in specified project with search terms");
                     jArray = QueryInfo.Action.GetTemplatesInfo(ConfigurationManager.AppSettings["projectid"]);
                     var tempIdToFile = Helpers.GetIdsLatestWithSearchTerms(jArray, ConfigurationManager.AppSettings["TemplateSearchTerms"].Split(','));
-                    var lineToWrite = ConfigurationManager.AppSettings["PropName"]+"="+tempIdToFile;
+                    var lineToWrite = ConfigurationManager.AppSettings["PropName"] + "=" + tempIdToFile;
                     File.WriteAllText(ConfigurationManager.AppSettings["PropertiesFilePath"], lineToWrite);
                     break;
                 case CommandActions.CreateTemplate:

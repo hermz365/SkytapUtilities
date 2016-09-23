@@ -37,8 +37,42 @@ namespace SkytapUtilities
             return tempList.Max().ToString();
         }
 
+        public static void EnsureAllConfigsAreRunning(List<string> ids)
+        {
+            var i = 0;
+            var configsTobeQuery = ids.ToList();
+
+            while (true)
+            {
+                var configsToStart = new List<string>();
+                foreach (var id in configsTobeQuery)
+                {
+                    var c = QueryInfo.Action.Config(id);
+                    Console.WriteLine("name: " + c.Value<string>("name") + " runstate: " + c.Value<string>("runstate"));
+                    if (!c.Value<string>("runstate").Equals("running", StringComparison.CurrentCultureIgnoreCase))
+                        configsToStart.Add(id);
+                }
+
+                if (configsToStart.Count == 0)
+                {
+                    Console.WriteLine("All configs started");
+                    break;
+                }
+                else
+                {
+                    foreach (var s in configsToStart)
+                    {
+                        Edit.Action.StartConfig(s);
+                    }
+                    WaitForConfigsNotBusy(configsToStart);
+                }
+            }
+        }
+
         public static void WaitForConfigsNotBusy(List<string> ids)
         {
+            var i = 0;
+
             while (true)
             {
                 List<string> busyConfigs, notBusyConfigs;
@@ -63,6 +97,13 @@ namespace SkytapUtilities
                     Console.WriteLine("All configs not busy.");
                     break;
                 }
+
+                if (i == int.MaxValue)
+                {
+                    Console.WriteLine("Have to get out at some point. Can't stay in this loop forever.");
+                    throw new TimeoutException();
+                }
+                i++;
             }
         }
 
@@ -75,12 +116,6 @@ namespace SkytapUtilities
             {
                 var c = QueryInfo.Action.Config(id);
                 Console.WriteLine("name: " + c.Value<string>("name") + " runstate: " + c.Value<string>("runstate"));
-                if (c.Value<string>("runstate") == "suspended")
-                {
-                    Console.WriteLine("Sometimes skytap just suspends it when it is supposed to run.");
-                    Edit.Action.StartConfig(id);
-                    c = QueryInfo.Action.Config(id);
-                }
                 if (c.Value<string>("runstate").Equals("busy", StringComparison.CurrentCultureIgnoreCase))
                     busyConfigs.Add(id);
                 else
